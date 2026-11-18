@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="240"
+  height="226"
+  viewBox="0 0 240 226"
+  fill="none"
+>
+  <defs>
+    <clipPath id="thumbClip">
+      <rect
+        x="12"
+        y="12"
+        width="220"
+        height="140"
+        rx="6"
+      />
+    </clipPath>
+  </defs>
+
+  <rect
+    x="0.5"
+    y="0.5"
+    width="239"
+    height="225"
+    rx="9"
+    fill="#0d1117"
+    stroke="#30363d"
+  />
+
+  
+      <rect
+        x="12" y="12"
+        width="220"
+        height="140"
+        rx="6"
+        fill="#161b22"
+      />
+
+      <text
+        x="120"
+        y="78"
+        fill="#8b949e"
+        font-size="12"
+        text-anchor="middle"
+      >No preview available</text>
+    
+
+  
+      <image
+        href="./project-asset-project-casino-games-25-icon.png"
+        x="16"
+        y="164"
+        width="20"
+        height="20"
+        preserveAspectRatio="xMidYMid meet"
+      />
+    
+
+  <text
+    x="44"
+    y="179"
+    fill="#e6edf3"
+    font-size="14"
+    font-weight="600"
+  >Casino Games</text>
+
+  
+      <text
+        x="16"
+        y="201"
+        fill="#8b949e"
+        font-size="11"
+      >Play games, earn currency, open chests and</text>
+    
+      <text
+        x="16"
+        y="217"
+        fill="#8b949e"
+        font-size="11"
+      >compete with others in a casino-themed</text>
+    
+      <text
+        x="16"
+        y="233"
+        fill="#8b949e"
+        font-size="11"
+      >Discord bot. Includes card games, con......</text>
+    
+
+  <path
+    d="M12 246 H308"
+    stroke="#30363d"
+    stroke-width="1"
+  />
+
+  
+      <circle cx="21" cy="258" r="4" fill="#f1e05a"/>
+      <text
+        x="31"
+        y="262"
+        fill="#8b949e"
+        font-size="10"
+      >JavaScript</text>
+    
+  
+      <text
+        x="304"
+        y="262"
+        text-anchor="end"
+        fill="#6e7681"
+        font-size="9"
+      >WarzeDev/warzeCasinoBot</text>
+    
+</svg>

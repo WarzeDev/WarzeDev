@@ -2,24 +2,21 @@
  // generate-readme.js — run with: bun generate-readme.js
 
 import { mkdir, readdir, unlink } from "node:fs/promises";
-import { dirname, resolve, basename } from "node:path";
+import { dirname, resolve } from "node:path";
 
 const API = process.env.PROJECTS_API ||
   "https://projects.warze.org/api/projects?match=any&sort=created&order=desc";
 
 const OUT = process.env.OUTPUT_FILE || "README.md";
 
-const CARD_WIDTH = 320;
-const CARD_HEIGHT = 244;
+const CARD_WIDTH = 240;
+const CARD_HEIGHT = 226;
 
-const THUMB_X = 12;
-const THUMB_Y = 12;
-const THUMB_WIDTH = 296;
+const THUMB_WIDTH = 220;
 const THUMB_HEIGHT = 140;
 
 const OUTPUT_DIR = dirname(resolve(OUT));
-
-// ---------- helpers ----------
+const ASSET_DIR = resolve(OUTPUT_DIR, "assets");
 
 const LANG_COLORS = {
   JavaScript: "#f1e05a",
@@ -62,6 +59,8 @@ const LANG_PRIORITY = {
   Ollama: 10,
 };
 
+// ---------- helpers ----------
+
 function esc(value = "") {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -84,7 +83,7 @@ function safeUrl(url) {
   }
 }
 
-function absUrl(path, base = "https://projects.warze.org") {
+function absUrl(path) {
   if (!path) return null;
 
   if (/^https?:\/\//i.test(path)) {
@@ -92,7 +91,7 @@ function absUrl(path, base = "https://projects.warze.org") {
   }
 
   return safeUrl(
-    base.replace(/\/$/, "") + "/" + path.replace(/^\//, "")
+    "https://projects.warze.org/" + path.replace(/^\//, "")
   );
 }
 
@@ -128,15 +127,16 @@ function slugify(value) {
 function truncate(value, max) {
   const text = String(value || "").trim();
 
-  if (text.length <= max) return text;
-
-  return text.slice(0, max - 3).trimEnd() + "...";
+  return text.length > max
+    ? text.slice(0, max - 3).trimEnd() + "..."
+    : text;
 }
 
-function wrapText(value, maxChars, maxLines = 2) {
+function wrapText(value, maxChars, maxLines = 3) {
   const words = String(value || "").trim().split(/\s+/);
   const lines = [];
   let current = "";
+  let overflow = false;
 
   for (const word of words) {
     const next = current ? `${current} ${word}` : word;
@@ -145,7 +145,10 @@ function wrapText(value, maxChars, maxLines = 2) {
       lines.push(current);
       current = word;
 
-      if (lines.length >= maxLines) break;
+      if (lines.length === maxLines) {
+        overflow = true;
+        break;
+      }
     } else {
       current = next;
     }
@@ -153,39 +156,121 @@ function wrapText(value, maxChars, maxLines = 2) {
 
   if (current && lines.length < maxLines) {
     lines.push(current);
+  } else if (current) {
+    overflow = true;
   }
 
-  if (lines.length === maxLines) {
-    const consumed = lines.join(" ").length;
-    if (consumed < String(value || "").trim().length) {
-      lines[maxLines - 1] = truncate(lines[maxLines - 1], maxChars);
-    }
+  if (overflow && lines.length) {
+    lines[lines.length - 1] =
+      truncate(lines[lines.length - 1], maxChars - 3) + "...";
   }
 
   return lines;
 }
 
+// ---------- asset downloading ----------
+
+function extensionFromResponse(response, url) {
+  const contentType = response.headers
+    .get("content-type")
+    ?.split(";")[0]
+    .trim();
+
+  const mimeExtensions = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+    "image/svg+xml": ".svg",
+    "image/avif": ".avif",
+    "image/bmp": ".bmp",
+    "image/x-icon": ".ico",
+  };
+
+  if (mimeExtensions[contentType]) {
+    return mimeExtensions[contentType];
+  }
+
+  try {
+    const ext = new URL(url).pathname.match(
+      /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico)$/i
+    )?.[0];
+
+    if (ext) return ext.toLowerCase();
+  } catch {}
+
+  return ".png";
+}
+
+const downloadedAssets = new Map();
+
+async function downloadAsset(url, filename) {
+  url = safeUrl(url);
+
+  if (!url) return null;
+
+  if (downloadedAssets.has(url)) {
+    return downloadedAssets.get(url);
+  }
+
+  const promise = (async () => {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent": "Warze-README-Generator/1.0",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const contentType = response.headers.get("content-type") || "";
+
+      if (!contentType.startsWith("image/")) {
+        throw new Error(`Not an image: ${contentType}`);
+      }
+
+      const extension = extensionFromResponse(response, url);
+      const assetName = `${filename}${extension}`;
+
+      await Bun.write(
+        resolve(ASSET_DIR, assetName),
+        new Uint8Array(await response.arrayBuffer())
+      );
+
+      console.log(`Downloaded ${assetName}`);
+
+      return assetName;
+    } catch (error) {
+      console.warn(`Failed to download ${url}: ${error.message}`);
+      return null;
+    }
+  })();
+
+  downloadedAssets.set(url, promise);
+
+  return promise;
+}
+
 // ---------- SVG generation ----------
 
-function renderSVG(project) {
-  const title = truncate(project.title || "Untitled project", 32);
+function renderSVG(project, thumbnailFile, iconFile) {
+  const title = truncate(project.title || "Untitled project", 34);
   const description = project.description || "";
-
-  const thumbnail = absUrl(project.thumbnail);
-  const icon = absUrl(project.icon);
 
   const language = primaryLanguage(project.languages || []);
   const languageColor = LANG_COLORS[language] || LANG_COLORS.default;
 
   const github = parseGithub(project.github_link || project.link);
 
-  const descriptionLines = wrapText(description, 43, 2);
+  const descriptionLines = wrapText(description, 43, 3);
 
-  const thumbnailBlock = thumbnail
+  const thumbnailBlock = thumbnailFile
     ? `
       <rect
-        x="${THUMB_X}"
-        y="${THUMB_Y}"
+        x="12" y="12"
         width="${THUMB_WIDTH}"
         height="${THUMB_HEIGHT}"
         rx="6"
@@ -193,9 +278,9 @@ function renderSVG(project) {
       />
 
       <image
-        href="${esc(thumbnail)}"
-        x="${THUMB_X}"
-        y="${THUMB_Y}"
+        href="./${esc(thumbnailFile)}"
+        x="12"
+        y="12"
         width="${THUMB_WIDTH}"
         height="${THUMB_HEIGHT}"
         preserveAspectRatio="xMidYMid meet"
@@ -204,26 +289,26 @@ function renderSVG(project) {
     `
     : `
       <rect
-        x="${THUMB_X}"
-        y="${THUMB_Y}"
+        x="12" y="12"
         width="${THUMB_WIDTH}"
         height="${THUMB_HEIGHT}"
         rx="6"
         fill="#161b22"
       />
+
       <text
         x="${CARD_WIDTH / 2}"
-        y="${THUMB_Y + THUMB_HEIGHT / 2 + 5}"
+        y="78"
         fill="#8b949e"
-        font-size="13"
+        font-size="12"
         text-anchor="middle"
       >No preview available</text>
     `;
 
-  const iconBlock = icon
+  const iconBlock = iconFile
     ? `
       <image
-        href="${esc(icon)}"
+        href="./${esc(iconFile)}"
         x="16"
         y="164"
         width="20"
@@ -233,13 +318,13 @@ function renderSVG(project) {
     `
     : "";
 
-  const titleX = icon ? 44 : 16;
+  const titleX = iconFile ? 44 : 16;
 
   const descriptionBlock = descriptionLines
     .map((line, index) => `
       <text
         x="16"
-        y="${199 + index * 16}"
+        y="${201 + index * 16}"
         fill="#8b949e"
         font-size="11"
       >${esc(line)}</text>
@@ -248,10 +333,10 @@ function renderSVG(project) {
 
   const languageBlock = language
     ? `
-      <circle cx="21" cy="228" r="4" fill="${languageColor}"/>
+      <circle cx="21" cy="258" r="4" fill="${languageColor}"/>
       <text
         x="31"
-        y="232"
+        y="262"
         fill="#8b949e"
         font-size="10"
       >${esc(language)}</text>
@@ -266,7 +351,7 @@ function renderSVG(project) {
     ? `
       <text
         x="304"
-        y="232"
+        y="262"
         text-anchor="end"
         fill="#6e7681"
         font-size="9"
@@ -277,7 +362,6 @@ function renderSVG(project) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg
   xmlns="http://www.w3.org/2000/svg"
-  xmlns:xlink="http://www.w3.org/1999/xlink"
   width="${CARD_WIDTH}"
   height="${CARD_HEIGHT}"
   viewBox="0 0 ${CARD_WIDTH} ${CARD_HEIGHT}"
@@ -286,8 +370,8 @@ function renderSVG(project) {
   <defs>
     <clipPath id="thumbClip">
       <rect
-        x="${THUMB_X}"
-        y="${THUMB_Y}"
+        x="12"
+        y="12"
         width="${THUMB_WIDTH}"
         height="${THUMB_HEIGHT}"
         rx="6"
@@ -320,7 +404,7 @@ function renderSVG(project) {
   ${descriptionBlock}
 
   <path
-    d="M12 212 H308"
+    d="M12 246 H308"
     stroke="#30363d"
     stroke-width="1"
   />
@@ -330,37 +414,52 @@ function renderSVG(project) {
 </svg>`;
 }
 
-// ---------- card files ----------
+// ---------- card generation ----------
 
 async function generateCards(projects) {
-  await mkdir(OUTPUT_DIR, { recursive: true });
+  await mkdir(ASSET_DIR, { recursive: true });
 
-  // Remove previously generated project cards.
-  const existing = await readdir(OUTPUT_DIR);
+  const existing = await readdir(ASSET_DIR);
 
   for (const file of existing) {
-    if (/^project-card-.*\.svg$/.test(file)) {
-      await unlink(resolve(OUTPUT_DIR, file));
+    if (
+      /^project-card-.*\.svg$/.test(file) ||
+      /^project-asset-/.test(file)
+    ) {
+      await unlink(resolve(ASSET_DIR, file));
     }
   }
+
+  downloadedAssets.clear();
 
   const cards = [];
 
   for (let i = 0; i < projects.length; i++) {
     const project = projects[i];
 
-    const filename =
-      `project-card-${slugify(project.title)}-${i + 1}.svg`;
+    const prefix = `project-${slugify(project.title)}-${i + 1}`;
+
+    const thumbnailUrl = absUrl(project.thumbnail);
+    const iconUrl = absUrl(project.icon);
+
+    const [thumbnailFile, iconFile] = await Promise.all([
+      downloadAsset(thumbnailUrl, `project-asset-${prefix}-thumbnail`),
+      downloadAsset(iconUrl, `project-asset-${prefix}-icon`),
+    ]);
+
+    const svgFile = `project-card-${prefix}.svg`;
 
     await Bun.write(
-      resolve(OUTPUT_DIR, filename),
-      renderSVG(project)
+      resolve(ASSET_DIR, svgFile),
+      renderSVG(project, thumbnailFile, iconFile)
     );
 
     cards.push({
       project,
-      filename,
+      filename: svgFile,
     });
+
+    console.log(`Generated ${svgFile}`);
   }
 
   return cards;
@@ -368,23 +467,25 @@ async function generateCards(projects) {
 
 // ---------- README generation ----------
 
+
 function renderSection(title, projects) {
   if (!projects.length) return "";
 
   const rows = [];
 
-  for (let i = 0; i < projects.length; i += 2) {
+  for (let i = 0; i < projects.length; i += 3) {
     const a = projects[i];
     const b = projects[i + 1];
+    const c = projects[i + 2];
 
     const renderImage = (card) => {
-      if (!card) return "";
+      if (!card) return "&nbsp;";
 
       const link = safeUrl(
         card.project.link || card.project.github_link
       );
 
-      const image = `<img src="./${card.filename}" width="${CARD_WIDTH}" alt="${esc(card.project.title)}" />`;
+      const image = `<img src="./assets/${card.filename}" width="${CARD_WIDTH}" alt="${esc(card.project.title)}" />`;
 
       return link
         ? `<a href="${esc(link)}">${image}</a>`
@@ -393,21 +494,25 @@ function renderSection(title, projects) {
 
     rows.push(`
 <tr>
-  <td width="340" valign="top" align="center">
+  <td width="250" valign="top" align="center">
     ${renderImage(a)}
   </td>
-  <td width="340" valign="top" align="center">
+  <td width="250" valign="top" align="center">
     ${renderImage(b)}
+  </td>
+  <td width="250" valign="top" align="center">
+    ${renderImage(c)}
   </td>
 </tr>`);
   }
 
   return `## ${title}
 
-<table cellspacing="0" cellpadding="4" width="700">
+<table cellspacing="0" cellpadding="3" width="759">
 ${rows.join("\n")}
 </table>`;
 }
+
 
 // ---------- main ----------
 
@@ -440,18 +545,15 @@ async function main() {
 
   const cards = await generateCards(projects);
 
-  // Match generated cards back to their project categories.
   const cardGroups = {};
 
   for (const [type, group] of Object.entries(groups)) {
     cardGroups[type] = group.map((project) =>
       cards.find((card) => card.project === project)
-    );
+    ).filter(Boolean);
   }
 
-  const header = `# Hi, I'm Warze
-
-I build games, tools and web experiences. Here are some of my projects, organized by category.`;
+  const header = ``;
 
   const sections = [
     renderSection("Games", cardGroups.game),
@@ -459,19 +561,21 @@ I build games, tools and web experiences. Here are some of my projects, organize
     renderSection("Discord Bots", cardGroups.discord_bot),
   ].filter(Boolean);
 
-  const footer =
-    `<sub>Updated ${new Date().toISOString().slice(0, 10)}</sub>`;
+  //const footer =
+  //  `<sub>Updated ${new Date().toISOString().slice(0, 10)}</sub>`;
 
   const output = [
     header,
     ...sections,
-    footer,
+    //footer,
   ].join("\n\n") + "\n";
 
   await Bun.write(OUT, output);
 
+  console.log("");
   console.log(`Generated ${cards.length} SVG cards.`);
-  console.log(`Updated ${basename(OUT)}.`);
+  console.log(`Assets directory: ${ASSET_DIR}`);
+  console.log(`README updated: ${OUT}`);
 }
 
 main().catch((error) => {

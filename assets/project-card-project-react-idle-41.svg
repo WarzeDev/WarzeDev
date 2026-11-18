@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="240"
+  height="226"
+  viewBox="0 0 240 226"
+  fill="none"
+>
+  <defs>
+    <clipPath id="thumbClip">
+      <rect
+        x="12"
+        y="12"
+        width="220"
+        height="140"
+        rx="6"
+      />
+    </clipPath>
+  </defs>
+
+  <rect
+    x="0.5"
+    y="0.5"
+    width="239"
+    height="225"
+    rx="9"
+    fill="#0d1117"
+    stroke="#30363d"
+  />
+
+  
+      <rect
+        x="12" y="12"
+        width="220"
+        height="140"
+        rx="6"
+        fill="#161b22"
+      />
+
+      <image
+        href="./project-asset-project-react-idle-41-thumbnail.png"
+        x="12"
+        y="12"
+        width="220"
+        height="140"
+        preserveAspectRatio="xMidYMid meet"
+        clip-path="url(#thumbClip)"
+      />
+    
+
+  
+      <image
+        href="./project-asset-project-react-idle-41-icon.png"
+        x="16"
+        y="164"
+        width="20"
+        height="20"
+        preserveAspectRatio="xMidYMid meet"
+      />
+    
+
+  <text
+    x="44"
+    y="179"
+    fill="#e6edf3"
+    font-size="14"
+    font-weight="600"
+  >React Idle</text>
+
+  
+      <text
+        x="16"
+        y="201"
+        fill="#8b949e"
+        font-size="11"
+      >An idle game built with React.</text>
+    
+
+  <path
+    d="M12 246 H308"
+    stroke="#30363d"
+    stroke-width="1"
+  />
+
+  
+      <circle cx="21" cy="258" r="4" fill="#f1e05a"/>
+      <text
+        x="31"
+        y="262"
+        fill="#8b949e"
+        font-size="10"
+      >JavaScript</text>
+    
+  
+</svg>
