@@ -1,109 +1,50 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg
-  xmlns="http://www.w3.org/2000/svg"
-  width="240"
-  height="226"
-  viewBox="0 0 240 226"
-  fill="none"
->
+<svg xmlns="http://www.w3.org/2000/svg"
+  width="240" height="276"
+  viewBox="0 0 240 276" fill="none">
+
   <defs>
     <clipPath id="thumbClip">
-      <rect
-        x="12"
-        y="12"
-        width="220"
-        height="140"
-        rx="6"
-      />
+      <rect x="12" y="12" width="216"
+        height="140" rx="6"/>
     </clipPath>
   </defs>
 
-  <rect
-    x="0.5"
-    y="0.5"
-    width="239"
-    height="225"
-    rx="9"
-    fill="#0d1117"
-    stroke="#30363d"
-  />
+  <rect x="0.5" y="0.5" width="239"
+    height="275" rx="9"
+    fill="#0d1117" stroke="#30363d"/>
 
   
-      <rect
-        x="12" y="12"
-        width="220"
-        height="140"
-        rx="6"
-        fill="#161b22"
-      />
+    <rect x="12" y="12" width="216" height="140"
+      rx="6" fill="#161b22"/>
+    <image href="./project-asset-project-permaplace-27-thumbnail.png"
+            x="12" y="12" width="216" height="140"
+            preserveAspectRatio="xMidYMid meet" clip-path="url(#thumbClip)"/>
+  
+  <image href="./project-asset-project-permaplace-27-icon.png" x="16" y="162"
+      width="24" height="24" preserveAspectRatio="xMidYMid meet"/>
 
-      <image
-        href="./project-asset-project-permaplace-27-thumbnail.png"
-        x="12"
-        y="12"
-        width="220"
-        height="140"
-        preserveAspectRatio="xMidYMid meet"
-        clip-path="url(#thumbClip)"
-      />
-    
+  <text x="48" y="180" fill="#e6edf3"
+    font-size="17" font-weight="600">Permaplace</text>
 
   
-      <image
-        href="./project-asset-project-permaplace-27-icon.png"
-        x="16"
-        y="164"
-        width="20"
-        height="20"
-        preserveAspectRatio="xMidYMid meet"
-      />
+      <text x="16" y="207"
+        fill="#8b949e" font-size="10.5">The place where every pixel lasts</text>
+    
+      <text x="16" y="223"
+        fill="#8b949e" font-size="10.5">a lifetime. Solidify your art on a</text>
+    
+      <text x="16" y="239"
+        fill="#8b949e" font-size="10.5">giant canvas or create rooms......</text>
     
 
-  <text
-    x="44"
-    y="179"
-    fill="#e6edf3"
-    font-size="14"
-    font-weight="600"
-  >Permaplace</text>
+  <path d="M12 246 H228" stroke="#30363d" stroke-width="1"/>
 
   
-      <text
-        x="16"
-        y="201"
-        fill="#8b949e"
-        font-size="11"
-      >The place where every pixel lasts a</text>
-    
-      <text
-        x="16"
-        y="217"
-        fill="#8b949e"
-        font-size="11"
-      >lifetime. Solidify your art on a giant</text>
-    
-      <text
-        x="16"
-        y="233"
-        fill="#8b949e"
-        font-size="11"
-      >canvas or create rooms with others.</text>
-    
-
-  <path
-    d="M12 246 H308"
-    stroke="#30363d"
-    stroke-width="1"
-  />
-
-  
-      <circle cx="21" cy="258" r="4" fill="#f1e05a"/>
-      <text
-        x="31"
-        y="262"
-        fill="#8b949e"
-        font-size="10"
-      >JavaScript</text>
+      <circle cx="20" cy="258" r="4" fill="#f1e05a"/>
+      <text x="30" y="262" fill="#8b949e" font-size="10">
+        JavaScript
+      </text>
     
   
 </svg>
