@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  xmlns:xlink="http://www.w3.org/1999/xlink"
+  width="320"
+  height="244"
+  viewBox="0 0 320 244"
+  fill="none"
+>
+  <defs>
+    <clipPath id="thumbClip">
+      <rect
+        x="12"
+        y="12"
+        width="296"
+        height="140"
+        rx="6"
+      />
+    </clipPath>
+  </defs>
+
+  <rect
+    x="0.5"
+    y="0.5"
+    width="319"
+    height="243"
+    rx="9"
+    fill="#0d1117"
+    stroke="#30363d"
+  />
+
+  
+      <rect
+        x="12"
+        y="12"
+        width="296"
+        height="140"
+        rx="6"
+        fill="#161b22"
+      />
+      <text
+        x="160"
+        y="87"
+        fill="#8b949e"
+        font-size="13"
+        text-anchor="middle"
+      >No preview available</text>
+    
+
+  
+      <image
+        href="https://projects.warze.org/media/58e6942a91e73b558469d69985fd070d.png"
+        x="16"
+        y="164"
+        width="20"
+        height="20"
+        preserveAspectRatio="xMidYMid meet"
+      />
+    
+
+  <text
+    x="44"
+    y="179"
+    fill="#e6edf3"
+    font-size="14"
+    font-weight="600"
+  >Calculator</text>
+
+  
+      <text
+        x="16"
+        y="199"
+        fill="#8b949e"
+        font-size="11"
+      >A simple calculator app.</text>
+    
+
+  <path
+    d="M12 212 H308"
+    stroke="#30363d"
+    stroke-width="1"
+  />
+
+  
+      <circle cx="21" cy="228" r="4" fill="#f1e05a"/>
+      <text
+        x="31"
+        y="232"
+        fill="#8b949e"
+        font-size="10"
+      >JavaScript</text>
+    
+  
+</svg>

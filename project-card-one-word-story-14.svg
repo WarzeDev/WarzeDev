@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  xmlns:xlink="http://www.w3.org/1999/xlink"
+  width="320"
+  height="244"
+  viewBox="0 0 320 244"
+  fill="none"
+>
+  <defs>
+    <clipPath id="thumbClip">
+      <rect
+        x="12"
+        y="12"
+        width="296"
+        height="140"
+        rx="6"
+      />
+    </clipPath>
+  </defs>
+
+  <rect
+    x="0.5"
+    y="0.5"
+    width="319"
+    height="243"
+    rx="9"
+    fill="#0d1117"
+    stroke="#30363d"
+  />
+
+  
+      <rect
+        x="12"
+        y="12"
+        width="296"
+        height="140"
+        rx="6"
+        fill="#161b22"
+      />
+
+      <image
+        href="https://projects.warze.org/media/5ba0f596d4e0fe604119a4647e31cc1f.png"
+        x="12"
+        y="12"
+        width="296"
+        height="140"
+        preserveAspectRatio="xMidYMid meet"
+        clip-path="url(#thumbClip)"
+      />
+    
+
+  
+
+  <text
+    x="16"
+    y="179"
+    fill="#e6edf3"
+    font-size="14"
+    font-weight="600"
+  >One Word Story</text>
+
+  
+      <text
+        x="16"
+        y="199"
+        fill="#8b949e"
+        font-size="11"
+      >A Discord bot that lets users build a story</text>
+    
+      <text
+        x="16"
+        y="215"
+        fill="#8b949e"
+        font-size="11"
+      >together, one word at a time, which can</text>
+    
+
+  <path
+    d="M12 212 H308"
+    stroke="#30363d"
+    stroke-width="1"
+  />
+
+  
+      <circle cx="21" cy="228" r="4" fill="#3178c6"/>
+      <text
+        x="31"
+        y="232"
+        fill="#8b949e"
+        font-size="10"
+      >TypeScript</text>
+    
+  
+</svg>
