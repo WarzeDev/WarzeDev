@@ -311,17 +311,20 @@ async function generateCards(projects) {
 
   for (let i = 0; i < projects.length; i++) {
     const project = projects[i];
-    const prefix = `project-card-${slugify(project.title)}-${i + 1}`;
-    const filename = `${prefix}.png`;
+    const thumbnail = await downloadAsset(absUrl(project.thumbnail));
 
-    const [thumbnail, icon] = await Promise.all([
-      downloadAsset(absUrl(project.thumbnail)),
-      downloadAsset(absUrl(project.icon)),
-    ]);
+    // Skip projects without a valid image preview.
+    if (!thumbnail) {
+      console.log(`Skipped ${project.title || "Untitled project"}: no preview`);
+      continue;
+    }
 
-    const svg = renderSVG(project, thumbnail, icon);
+    const icon = await downloadAsset(absUrl(project.icon));
+    const filename = `project-card-${slugify(project.title)}-${i + 1}.png`;
 
-    await sharp(Buffer.from(svg))
+    const png = renderSVG(project, thumbnail, icon);
+
+    await sharp(Buffer.from(png))
       .png()
       .toFile(resolve(ASSET_DIR, filename));
 
@@ -337,32 +340,18 @@ async function generateCards(projects) {
 function renderSection(title, projects) {
   if (!projects.length) return "";
 
-  const rows = [];
+  const images = projects.map(({ project, filename }) => {
+    const link = safeUrl(project.link || project.github_link);
+    const image = `<img src="assets/${filename}" width="${CARD_WIDTH}" alt="${esc(project.title)}" />`;
 
-  for (let i = 0; i < projects.length; i += 3) {
-    const row = projects.slice(i, i + 3);
-
-    rows.push(`
-<tr>
-${[0, 1, 2].map((index) => {
-  const card = row[index];
-  if (!card) return '<td width="240"></td>';
-
-  const link = safeUrl(card.project.link || card.project.github_link);
-  const image = `<img src="assets/${card.filename}" width="${CARD_WIDTH}" alt="${esc(card.project.title)}" />`;
-
-  return `<td width="240" valign="top" align="center">
-    ${link ? `<a href="${esc(link)}">${image}</a>` : image}
-  </td>`;
-}).join("\n")}
-</tr>`);
-  }
+    return link
+      ? `<a href="${esc(link)}">${image}</a>`
+      : image;
+  });
 
   return `## ${title}
 
-<table cellspacing="0" cellpadding="2" width="732">
-${rows.join("\n")}
-</table>`;
+${images.join("\n")}`;
 }
 
 // ---------- main ----------
@@ -377,35 +366,29 @@ async function main() {
   const json = await response.json();
   const projects = json.data ?? [];
 
+  const cards = await generateCards(projects);
+
   const groups = {
     game: [],
     website: [],
     discord_bot: [],
   };
 
-  for (const project of projects) {
-    (groups[project.type] ??= []).push(project);
+  for (const card of cards) {
+    (groups[card.project.type] ??= []).push(card);
   }
 
-  for (const key of Object.keys(groups)) {
-    groups[key].sort(
-      (a, b) => new Date(b.created_at) - new Date(a.created_at)
+  for (const group of Object.values(groups)) {
+    group.sort(
+      (a, b) =>
+        new Date(b.project.created_at) - new Date(a.project.created_at)
     );
   }
 
-  const cards = await generateCards(projects);
-  const cardGroups = {};
-
-  for (const [type, group] of Object.entries(groups)) {
-    cardGroups[type] = group
-      .map((project) => cards.find((card) => card.project === project))
-      .filter(Boolean);
-  }
-
   const sections = [
-    renderSection("Games", cardGroups.game),
-    renderSection("Websites & Tools", cardGroups.website),
-    renderSection("Discord Bots", cardGroups.discord_bot),
+    renderSection("Games", groups.game),
+    renderSection("Websites & Tools", groups.website),
+    renderSection("Discord Bots", groups.discord_bot),
   ].filter(Boolean);
 
   await Bun.write(OUT, sections.join("\n\n") + "\n");
