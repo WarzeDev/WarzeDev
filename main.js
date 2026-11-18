@@ -3,10 +3,10 @@
 
 import { mkdir, readdir, unlink } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import sharp from "sharp";
 
 const API = process.env.PROJECTS_API ||
   "https://projects.warze.org/api/projects?match=any&sort=created&order=desc";
-
 const OUT = process.env.OUTPUT_FILE || "README.md";
 
 const CARD_WIDTH = 240;
@@ -82,7 +82,6 @@ function safeUrl(url) {
 
 function absUrl(path) {
   if (!path) return null;
-
   if (/^https?:\/\//i.test(path)) return safeUrl(path);
 
   return safeUrl(
@@ -91,17 +90,13 @@ function absUrl(path) {
 }
 
 function primaryLanguage(languages = []) {
-  if (!languages.length) return null;
-
   return [...languages].sort(
     (a, b) => (LANG_PRIORITY[b] ?? 40) - (LANG_PRIORITY[a] ?? 40)
-  )[0];
+  )[0] || null;
 }
 
 function parseGithub(url) {
-  if (!url) return null;
-
-  const match = url.match(/github\.com\/([^/]+)\/([^/#?]+)/i);
+  const match = url?.match(/github\.com\/([^/]+)\/([^/#?]+)/i);
   if (!match) return null;
 
   return {
@@ -162,42 +157,12 @@ function wrapText(value, maxChars, maxLines = 3) {
   return lines;
 }
 
-// ---------- asset downloading ----------
-
-function extensionFromResponse(response, url) {
-  const contentType = response.headers
-    .get("content-type")
-    ?.split(";")[0]
-    .trim();
-
-  const mimeExtensions = {
-    "image/png": ".png",
-    "image/jpeg": ".jpg",
-    "image/jpg": ".jpg",
-    "image/gif": ".gif",
-    "image/webp": ".webp",
-    "image/svg+xml": ".svg",
-    "image/avif": ".avif",
-    "image/bmp": ".bmp",
-    "image/x-icon": ".ico",
-  };
-
-  if (mimeExtensions[contentType]) return mimeExtensions[contentType];
-
-  try {
-    const ext = new URL(url).pathname.match(
-      /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico)$/i
-    )?.[0];
-
-    if (ext) return ext.toLowerCase();
-  } catch {}
-
-  return ".png";
-}
+// ---------- image downloading ----------
 
 const downloadedAssets = new Map();
 
-async function downloadAsset(url, filename) {
+
+async function downloadAsset(url) {
   url = safeUrl(url);
   if (!url) return null;
 
@@ -206,41 +171,51 @@ async function downloadAsset(url, filename) {
   }
 
   const promise = (async () => {
-    try {
-      const response = await fetch(url, {
-        headers: { "User-Agent": "Warze-README-Generator/1.0" },
-      });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        if (attempt > 0) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
 
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const response = await fetch(url, {
+          headers: {
+            "User-Agent": "Warze-README-Generator/1.0",
+          },
+        });
 
-      const contentType = response.headers.get("content-type") || "";
-      if (!contentType.startsWith("image/")) {
-        throw new Error(`Not an image: ${contentType}`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const buffer = Buffer.from(await response.arrayBuffer());
+
+        // Decode WebP, JPEG, GIF, etc. and normalize to PNG.
+        const pngBuffer = await sharp(buffer)
+          .rotate()
+          .png()
+          .toBuffer();
+
+        return {
+          dataUri: `data:image/png;base64,${pngBuffer.toString("base64")}`,
+        };
+      } catch (error) {
+        if (attempt === 1) {
+          console.warn(`Failed to download ${url}: ${error.message}`);
+        }
       }
-
-      const extension = extensionFromResponse(response, url);
-      const assetName = `${filename}${extension}`;
-
-      await Bun.write(
-        resolve(ASSET_DIR, assetName),
-        new Uint8Array(await response.arrayBuffer())
-      );
-
-      console.log(`Downloaded ${assetName}`);
-      return assetName;
-    } catch (error) {
-      console.warn(`Failed to download ${url}: ${error.message}`);
-      return null;
     }
+
+    return null;
   })();
 
   downloadedAssets.set(url, promise);
   return promise;
 }
 
-// ---------- SVG generation ----------
 
-function renderSVG(project, thumbnailFile, iconFile) {
+// ---------- PNG card generation ----------
+
+function renderSVG(project, thumbnail, icon) {
   const title = truncate(project.title || "Untitled project", 28);
   const descriptionLines = wrapText(project.description || "", 34, 3);
 
@@ -248,57 +223,44 @@ function renderSVG(project, thumbnailFile, iconFile) {
   const languageColor = LANG_COLORS[language] || LANG_COLORS.default;
   const github = parseGithub(project.github_link || project.link);
 
-  const thumbnailBlock = `
-    <rect x="12" y="12" width="${THUMB_WIDTH}" height="${THUMB_HEIGHT}"
-      rx="6" fill="#161b22"/>
-    ${
-      thumbnailFile
-        ? `<image href="./${esc(thumbnailFile)}"
-            x="12" y="12" width="${THUMB_WIDTH}" height="${THUMB_HEIGHT}"
-            preserveAspectRatio="xMidYMid meet" clip-path="url(#thumbClip)"/>`
-        : `<text x="${CARD_WIDTH / 2}" y="84" fill="#8b949e"
-            font-size="12" text-anchor="middle">No preview available</text>`
-    }
-  `;
+  const thumbnailBlock = thumbnail
+    ? `<image href="${thumbnail.dataUri}"
+        x="12" y="12" width="${THUMB_WIDTH}" height="${THUMB_HEIGHT}"
+        preserveAspectRatio="xMidYMid meet" clip-path="url(#thumbClip)"/>`
+    : `<text x="${CARD_WIDTH / 2}" y="84" fill="#8b949e"
+        font-size="12" text-anchor="middle">No preview available</text>`;
 
-  const iconBlock = iconFile
-  ? `<image href="./${esc(iconFile)}" x="16" y="162"
-      width="24" height="24" preserveAspectRatio="xMidYMid meet"/>`
-  : "";
+  const iconBlock = icon
+    ? `<image href="${icon.dataUri}" x="16" y="161"
+        width="24" height="24" preserveAspectRatio="xMidYMid meet"/>`
+    : "";
 
-  const titleX = iconFile ? 48 : 16;
+  const titleX = icon ? 48 : 16;
 
   const descriptionBlock = descriptionLines
     .map((line, index) => `
-      <text x="16" y="${207 + index * 16}"
+      <text x="16" y="${205 + index * 16}"
         fill="#8b949e" font-size="10.5">${esc(line)}</text>
     `)
     .join("");
 
   const languageBlock = language
-    ? `
-      <circle cx="20" cy="258" r="4" fill="${languageColor}"/>
-      <text x="30" y="262" fill="#8b949e" font-size="10">
-        ${esc(language)}
-      </text>
-    `
+    ? `<circle cx="20" cy="258" r="4" fill="${languageColor}"/>
+       <text x="30" y="262" fill="#8b949e" font-size="10">${esc(language)}</text>`
     : "";
 
   const repoText = github ? `${github.owner}/${github.repo}` : "";
 
   const repoBlock = repoText
-    ? `
-      <text x="224" y="262" text-anchor="end"
-        fill="#6e7681" font-size="8">
-        ${esc(truncate(repoText, 25))}
-      </text>
-    `
+    ? `<text x="224" y="262" text-anchor="end"
+        fill="#6e7681" font-size="8">${esc(truncate(repoText, 25))}</text>`
     : "";
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg"
   width="${CARD_WIDTH}" height="${CARD_HEIGHT}"
-  viewBox="0 0 ${CARD_WIDTH} ${CARD_HEIGHT}" fill="none">
+  viewBox="0 0 ${CARD_WIDTH} ${CARD_HEIGHT}"
+  font-family="Arial, Helvetica, sans-serif">
 
   <defs>
     <clipPath id="thumbClip">
@@ -311,11 +273,14 @@ function renderSVG(project, thumbnailFile, iconFile) {
     height="${CARD_HEIGHT - 1}" rx="9"
     fill="#0d1117" stroke="#30363d"/>
 
+  <rect x="12" y="12" width="${THUMB_WIDTH}"
+    height="${THUMB_HEIGHT}" rx="6" fill="#161b22"/>
+
   ${thumbnailBlock}
   ${iconBlock}
 
-  <text x="${titleX}" y="180" fill="#e6edf3"
-    font-size="17" font-weight="600">${esc(title)}</text>
+  <text x="${titleX}" y="179" fill="#e6edf3"
+    font-size="15" font-weight="600">${esc(title)}</text>
 
   ${descriptionBlock}
 
@@ -326,8 +291,6 @@ function renderSVG(project, thumbnailFile, iconFile) {
 </svg>`;
 }
 
-// ---------- card generation ----------
-
 async function generateCards(projects) {
   await mkdir(ASSET_DIR, { recursive: true });
 
@@ -335,7 +298,7 @@ async function generateCards(projects) {
 
   for (const file of existing) {
     if (
-      /^project-card-.*\.svg$/.test(file) ||
+      /^project-card-.*\.(svg|png)$/.test(file) ||
       /^project-asset-/.test(file)
     ) {
       await unlink(resolve(ASSET_DIR, file));
@@ -348,22 +311,22 @@ async function generateCards(projects) {
 
   for (let i = 0; i < projects.length; i++) {
     const project = projects[i];
-    const prefix = `project-${slugify(project.title)}-${i + 1}`;
+    const prefix = `project-card-${slugify(project.title)}-${i + 1}`;
+    const filename = `${prefix}.png`;
 
-    const [thumbnailFile, iconFile] = await Promise.all([
-      downloadAsset(absUrl(project.thumbnail), `project-asset-${prefix}-thumbnail`),
-      downloadAsset(absUrl(project.icon), `project-asset-${prefix}-icon`),
+    const [thumbnail, icon] = await Promise.all([
+      downloadAsset(absUrl(project.thumbnail)),
+      downloadAsset(absUrl(project.icon)),
     ]);
 
-    const svgFile = `project-card-${prefix}.svg`;
+    const svg = renderSVG(project, thumbnail, icon);
 
-    await Bun.write(
-      resolve(ASSET_DIR, svgFile),
-      renderSVG(project, thumbnailFile, iconFile)
-    );
+    await sharp(Buffer.from(svg))
+      .png()
+      .toFile(resolve(ASSET_DIR, filename));
 
-    cards.push({ project, filename: svgFile });
-    console.log(`Generated ${svgFile}`);
+    cards.push({ project, filename });
+    console.log(`Generated ${filename}`);
   }
 
   return cards;
@@ -383,7 +346,6 @@ function renderSection(title, projects) {
 <tr>
 ${[0, 1, 2].map((index) => {
   const card = row[index];
-
   if (!card) return '<td width="240"></td>';
 
   const link = safeUrl(card.project.link || card.project.github_link);
@@ -432,7 +394,6 @@ async function main() {
   }
 
   const cards = await generateCards(projects);
-
   const cardGroups = {};
 
   for (const [type, group] of Object.entries(groups)) {
@@ -449,8 +410,7 @@ async function main() {
 
   await Bun.write(OUT, sections.join("\n\n") + "\n");
 
-  console.log("");
-  console.log(`Generated ${cards.length} SVG cards.`);
+  console.log(`Generated ${cards.length} PNG cards.`);
   console.log(`Assets directory: ${ASSET_DIR}`);
   console.log(`README updated: ${OUT}`);
 }
