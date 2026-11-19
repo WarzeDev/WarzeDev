@@ -9,18 +9,17 @@ const API = process.env.PROJECTS_API ||
 const OUT = process.env.OUTPUT_FILE || "README.md";
 
 // Card layout (CSS pixels as displayed in the README)
-const CARD_WIDTH = 280;
+const CARD_WIDTH = 270;
 const CARD_HEIGHT = 312;
-const THUMB_WIDTH = 256;
+const THUMB_WIDTH = 246;
 const THUMB_HEIGHT = 156;
 
 // Section banner layout
 const BANNER_WIDTH = 840;
 const BANNER_HEIGHT = 64;
 
-// Render PNGs at 2x so they stay sharp on hi-DPI screens.
-// The <img> width attribute in the README scales them back down.
-const SCALE = 2;
+// Render scale: 1 = PNG files are exactly CARD_WIDTH / BANNER_WIDTH pixels wide.
+const SCALE = 1;
 const DENSITY = 72 * SCALE;
 
 const OUTPUT_DIR = dirname(resolve(OUT));
@@ -224,10 +223,10 @@ async function downloadAsset(url) {
 
 function renderCardSVG(project, thumbnail, icon) {
   const titleX = icon ? 52 : 16;
-  const titleMax = icon ? 21 : 25;
+  const titleMax = icon ? 20 : 24;
 
   const title = truncate(project.title || "Untitled project", titleMax);
-  const descriptionLines = wrapText(project.description || "", 38, 3);
+  const descriptionLines = wrapText(project.description || "", 36, 3);
 
   const language = primaryLanguage(project.languages || []);
   const languageColor = LANG_COLORS[language] || LANG_COLORS.default;
@@ -264,7 +263,7 @@ function renderCardSVG(project, thumbnail, icon) {
 
   const repoBlock = repoText
     ? `<text x="${CARD_WIDTH - 14}" y="297" text-anchor="end"
-        fill="#6e7681" font-size="10">${esc(truncate(repoText, 24))}</text>`
+        fill="#6e7681" font-size="10">${esc(truncate(repoText, 22))}</text>`
     : "";
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -394,11 +393,8 @@ function renderBannerSVG(title, count) {
     <rect x="0" y="${H - 3}" width="${W}" height="3" fill="#ffffff" opacity="0.85"/>
   </g>
 
-  <!-- white accent bar -->
-  <rect x="26" y="16" width="6" height="${H - 32}" rx="3" fill="#ffffff"/>
-
-  <text x="48" y="${H / 2 + 10}" fill="#ffffff"
-    font-size="28" font-weight="800" letter-spacing="4">${esc(title.toUpperCase())}</text>
+  <text x="28" y="${H / 2 + 10}" fill="#ffffff"
+    font-size="28" font-weight="800" letter-spacing="1">${esc(title)}</text>
 
   <!-- count pill -->
   <rect x="${pillX}" y="${pillY}" width="${pillW}" height="${pillH}"
