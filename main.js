@@ -1,4 +1,3 @@
-
 // generate-readme.js — run with: bun generate-readme.js
 
 import { mkdir, readdir, unlink } from "node:fs/promises";
@@ -9,10 +8,20 @@ const API = process.env.PROJECTS_API ||
   "https://projects.warze.org/api/projects?match=any&sort=created&order=desc";
 const OUT = process.env.OUTPUT_FILE || "README.md";
 
-const CARD_WIDTH = 240;
-const CARD_HEIGHT = 276;
-const THUMB_WIDTH = 216;
-const THUMB_HEIGHT = 140;
+// Card layout (CSS pixels as displayed in the README)
+const CARD_WIDTH = 280;
+const CARD_HEIGHT = 312;
+const THUMB_WIDTH = 256;
+const THUMB_HEIGHT = 156;
+
+// Section banner layout
+const BANNER_WIDTH = 840;
+const BANNER_HEIGHT = 64;
+
+// Render PNGs at 2x so they stay sharp on hi-DPI screens.
+// The <img> width attribute in the README scales them back down.
+const SCALE = 2;
+const DENSITY = 72 * SCALE;
 
 const OUTPUT_DIR = dirname(resolve(OUT));
 const ASSET_DIR = resolve(OUTPUT_DIR, "assets");
@@ -161,7 +170,6 @@ function wrapText(value, maxChars, maxLines = 3) {
 
 const downloadedAssets = new Map();
 
-
 async function downloadAsset(url) {
   url = safeUrl(url);
   if (!url) return null;
@@ -212,48 +220,51 @@ async function downloadAsset(url) {
   return promise;
 }
 
-
 // ---------- PNG card generation ----------
 
-function renderSVG(project, thumbnail, icon) {
-  const title = truncate(project.title || "Untitled project", 28);
-  const descriptionLines = wrapText(project.description || "", 34, 3);
+function renderCardSVG(project, thumbnail, icon) {
+  const titleX = icon ? 52 : 16;
+  const titleMax = icon ? 21 : 25;
+
+  const title = truncate(project.title || "Untitled project", titleMax);
+  const descriptionLines = wrapText(project.description || "", 38, 3);
 
   const language = primaryLanguage(project.languages || []);
   const languageColor = LANG_COLORS[language] || LANG_COLORS.default;
   const github = parseGithub(project.github_link || project.link);
 
+  // "slice" = fill the whole container, keep aspect ratio, crop the overflow.
+  // The clip-path trims the overflow and gives the thumbnail rounded corners.
   const thumbnailBlock = thumbnail
     ? `<image href="${thumbnail.dataUri}"
         x="12" y="12" width="${THUMB_WIDTH}" height="${THUMB_HEIGHT}"
-        preserveAspectRatio="xMidYMid meet" clip-path="url(#thumbClip)"/>`
-    : `<text x="${CARD_WIDTH / 2}" y="84" fill="#8b949e"
-        font-size="12" text-anchor="middle">No preview available</text>`;
+        preserveAspectRatio="xMidYMid slice" clip-path="url(#thumbClip)"/>`
+    : `<text x="${CARD_WIDTH / 2}" y="94" fill="#8b949e"
+        font-size="14" text-anchor="middle">No preview available</text>`;
 
   const iconBlock = icon
-    ? `<image href="${icon.dataUri}" x="16" y="161"
-        width="24" height="24" preserveAspectRatio="xMidYMid meet"/>`
+    ? `<image href="${icon.dataUri}" x="16" y="181"
+        width="28" height="28"
+        preserveAspectRatio="xMidYMid slice" clip-path="url(#iconClip)"/>`
     : "";
-
-  const titleX = icon ? 48 : 16;
 
   const descriptionBlock = descriptionLines
     .map((line, index) => `
-      <text x="16" y="${205 + index * 16}"
-        fill="#8b949e" font-size="10.5">${esc(line)}</text>
+      <text x="16" y="${228 + index * 17}"
+        fill="#8b949e" font-size="12.5">${esc(line)}</text>
     `)
     .join("");
 
   const languageBlock = language
-    ? `<circle cx="20" cy="258" r="4" fill="${languageColor}"/>
-       <text x="30" y="262" fill="#8b949e" font-size="10">${esc(language)}</text>`
+    ? `<circle cx="22" cy="293" r="5" fill="${languageColor}"/>
+       <text x="33" y="297" fill="#8b949e" font-size="12">${esc(language)}</text>`
     : "";
 
   const repoText = github ? `${github.owner}/${github.repo}` : "";
 
   const repoBlock = repoText
-    ? `<text x="224" y="262" text-anchor="end"
-        fill="#6e7681" font-size="8">${esc(truncate(repoText, 25))}</text>`
+    ? `<text x="${CARD_WIDTH - 14}" y="297" text-anchor="end"
+        fill="#6e7681" font-size="10">${esc(truncate(repoText, 24))}</text>`
     : "";
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -267,6 +278,9 @@ function renderSVG(project, thumbnail, icon) {
       <rect x="12" y="12" width="${THUMB_WIDTH}"
         height="${THUMB_HEIGHT}" rx="6"/>
     </clipPath>
+    <clipPath id="iconClip">
+      <rect x="16" y="181" width="28" height="28" rx="6"/>
+    </clipPath>
   </defs>
 
   <rect x="0.5" y="0.5" width="${CARD_WIDTH - 1}"
@@ -279,16 +293,22 @@ function renderSVG(project, thumbnail, icon) {
   ${thumbnailBlock}
   ${iconBlock}
 
-  <text x="${titleX}" y="179" fill="#e6edf3"
-    font-size="15" font-weight="600">${esc(title)}</text>
+  <text x="${titleX}" y="201" fill="#e6edf3"
+    font-size="18" font-weight="600">${esc(title)}</text>
 
   ${descriptionBlock}
 
-  <path d="M12 246 H228" stroke="#30363d" stroke-width="1"/>
+  <path d="M12 276 H${CARD_WIDTH - 12}" stroke="#30363d" stroke-width="1"/>
 
   ${languageBlock}
   ${repoBlock}
 </svg>`;
+}
+
+async function svgToPng(svg, filepath) {
+  await sharp(Buffer.from(svg), { density: DENSITY })
+    .png()
+    .toFile(filepath);
 }
 
 async function generateCards(projects) {
@@ -299,7 +319,8 @@ async function generateCards(projects) {
   for (const file of existing) {
     if (
       /^project-card-.*\.(svg|png)$/.test(file) ||
-      /^project-asset-/.test(file)
+      /^project-asset-/.test(file) ||
+      /^section-.*\.png$/.test(file)
     ) {
       await unlink(resolve(ASSET_DIR, file));
     }
@@ -322,11 +343,8 @@ async function generateCards(projects) {
     const icon = await downloadAsset(absUrl(project.icon));
     const filename = `project-card-${slugify(project.title)}-${i + 1}.png`;
 
-    const png = renderSVG(project, thumbnail, icon);
-
-    await sharp(Buffer.from(png))
-      .png()
-      .toFile(resolve(ASSET_DIR, filename));
+    const svg = renderCardSVG(project, thumbnail, icon);
+    await svgToPng(svg, resolve(ASSET_DIR, filename));
 
     cards.push({ project, filename });
     console.log(`Generated ${filename}`);
@@ -335,10 +353,74 @@ async function generateCards(projects) {
   return cards;
 }
 
+// ---------- section banner generation (red & white) ----------
+
+function renderBannerSVG(title, count) {
+  const W = BANNER_WIDTH;
+  const H = BANNER_HEIGHT;
+
+  const pillW = 64;
+  const pillH = 30;
+  const pillX = W - 24 - pillW;
+  const pillY = (H - pillH) / 2;
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+  width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"
+  font-family="Arial, Helvetica, sans-serif">
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#9b111e"/>
+      <stop offset="0.55" stop-color="#d7263d"/>
+      <stop offset="1" stop-color="#ff4d5e"/>
+    </linearGradient>
+    <clipPath id="round">
+      <rect width="${W}" height="${H}" rx="12"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#round)">
+    <rect width="${W}" height="${H}" fill="url(#bg)"/>
+
+    <!-- slanted white accents -->
+    <polygon points="${W - 250},0 ${W - 190},0 ${W - 250 + 40},${H} ${W - 250 - 20},${H}"
+      fill="#ffffff" opacity="0.10"/>
+    <polygon points="${W - 170},0 ${W - 150},0 ${W - 170 + 40},${H} ${W - 170 + 20},${H}"
+      fill="#ffffff" opacity="0.18"/>
+    <polygon points="0,0 90,0 60,${H} 0,${H}" fill="#ffffff" opacity="0.10"/>
+
+    <!-- bottom highlight line -->
+    <rect x="0" y="${H - 3}" width="${W}" height="3" fill="#ffffff" opacity="0.85"/>
+  </g>
+
+  <!-- white accent bar -->
+  <rect x="26" y="16" width="6" height="${H - 32}" rx="3" fill="#ffffff"/>
+
+  <text x="48" y="${H / 2 + 10}" fill="#ffffff"
+    font-size="28" font-weight="800" letter-spacing="4">${esc(title.toUpperCase())}</text>
+
+  <!-- count pill -->
+  <rect x="${pillX}" y="${pillY}" width="${pillW}" height="${pillH}"
+    rx="${pillH / 2}" fill="#ffffff"/>
+  <text x="${pillX + pillW / 2}" y="${pillY + 21}" text-anchor="middle"
+    fill="#c1121f" font-size="16" font-weight="800">${count}</text>
+</svg>`;
+}
+
 // ---------- README generation ----------
 
-function renderSection(title, projects) {
+async function renderSection(title, projects) {
   if (!projects.length) return "";
+
+  const bannerFile = `section-${slugify(title)}.png`;
+  await svgToPng(
+    renderBannerSVG(title, projects.length),
+    resolve(ASSET_DIR, bannerFile)
+  );
+  console.log(`Generated ${bannerFile}`);
+
+  const banner = `<img src="assets/${bannerFile}" width="${BANNER_WIDTH}" alt="${esc(title)}" />`;
 
   const images = projects.map(({ project, filename }) => {
     const link = safeUrl(project.link || project.github_link);
@@ -349,7 +431,7 @@ function renderSection(title, projects) {
       : image;
   });
 
-  return `## ${title}
+  return `<p align="center">${banner}</p>
 
 ${images.join("\n")}`;
 }
@@ -385,11 +467,13 @@ async function main() {
     );
   }
 
-  const sections = [
-    renderSection("Games", groups.game),
-    renderSection("Websites & Tools", groups.website),
-    renderSection("Discord Bots", groups.discord_bot),
-  ].filter(Boolean);
+  const sections = (
+    await Promise.all([
+      renderSection("Games", groups.game),
+      renderSection("Websites & Tools", groups.website),
+      renderSection("Discord Bots", groups.discord_bot),
+    ])
+  ).filter(Boolean);
 
   await Bun.write(OUT, sections.join("\n\n") + "\n");
 
