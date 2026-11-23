@@ -1,4 +1,4 @@
-// generate-readme.js — run with: bun generate-readme.js
+// generate-readme.js - run with: bun generate-readme.js
 
 import { mkdir, readdir, unlink } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -436,7 +436,7 @@ async function renderSection(title, projects) {
     // in the README's image alt text (tooltip / a11y / fallback).
     const desc = truncate(project.description || "", 120);
     const alt = desc
-      ? `${project.title || "Untitled project"} — ${desc}`
+      ? `${project.title || "Untitled project"} - ${desc}`
       : (project.title || "Untitled project");
 
     const image = `<img src="assets/${filename}" width="${CARD_WIDTH}" alt="${esc(alt)}" />`;
