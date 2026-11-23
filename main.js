@@ -9,9 +9,9 @@ const API = process.env.PROJECTS_API ||
 const OUT = process.env.OUTPUT_FILE || "README.md";
 
 // Card layout (CSS pixels as displayed in the README)
-const CARD_WIDTH = 270;
+const CARD_WIDTH = 272;          // was 270 (+2)
 const CARD_HEIGHT = 312;
-const THUMB_WIDTH = 246;
+const THUMB_WIDTH = 248;         // was 246 (+2)
 const THUMB_HEIGHT = 156;
 
 // Section banner layout
@@ -21,6 +21,10 @@ const BANNER_HEIGHT = 64;
 // Render scale: 1 = PNG files are exactly CARD_WIDTH / BANNER_WIDTH pixels wide.
 const SCALE = 1;
 const DENSITY = 72 * SCALE;
+
+// Network timeouts (ms)
+const FETCH_TIMEOUT_MS = 20000;
+const HARD_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes total
 
 const OUTPUT_DIR = dirname(resolve(OUT));
 const ASSET_DIR = resolve(OUTPUT_DIR, "assets");
@@ -129,7 +133,7 @@ function truncate(value, max) {
     : text;
 }
 
-function wrapText(value, maxChars, maxLines = 3) {
+function wrapText(value, maxChars, maxLines = 4) {   // default now 4 lines
   const words = String(value || "").trim().split(/\s+/);
   const lines = [];
   let current = "";
@@ -165,6 +169,10 @@ function wrapText(value, maxChars, maxLines = 3) {
   return lines;
 }
 
+function fetchWithTimeout(url, options = {}, timeoutMs = FETCH_TIMEOUT_MS) {
+  return fetch(url, { ...options, signal: AbortSignal.timeout(timeoutMs) });
+}
+
 // ---------- image downloading ----------
 
 const downloadedAssets = new Map();
@@ -184,7 +192,7 @@ async function downloadAsset(url) {
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
 
-        const response = await fetch(url, {
+        const response = await fetchWithTimeout(url, {
           headers: {
             "User-Agent": "Warze-README-Generator/1.0",
           },
@@ -226,7 +234,7 @@ function renderCardSVG(project, thumbnail, icon) {
   const titleMax = icon ? 20 : 24;
 
   const title = truncate(project.title || "Untitled project", titleMax);
-  const descriptionLines = wrapText(project.description || "", 36, 3);
+  const descriptionLines = wrapText(project.description || "", 38, 4); // wider + 4 lines
 
   const language = primaryLanguage(project.languages || []);
   const languageColor = LANG_COLORS[language] || LANG_COLORS.default;
@@ -242,27 +250,28 @@ function renderCardSVG(project, thumbnail, icon) {
         font-size="14" text-anchor="middle">No preview available</text>`;
 
   const iconBlock = icon
-    ? `<image href="${icon.dataUri}" x="16" y="181"
+    ? `<image href="${icon.dataUri}" x="16" y="179"
         width="28" height="28"
         preserveAspectRatio="xMidYMid slice" clip-path="url(#iconClip)"/>`
     : "";
 
+  // 4-line description block. Line height 15 keeps 4 lines clear of the divider.
   const descriptionBlock = descriptionLines
     .map((line, index) => `
-      <text x="16" y="${228 + index * 17}"
+      <text x="16" y="${224 + index * 15}"
         fill="#8b949e" font-size="12.5">${esc(line)}</text>
     `)
     .join("");
 
   const languageBlock = language
-    ? `<circle cx="22" cy="293" r="5" fill="${languageColor}"/>
-       <text x="33" y="297" fill="#8b949e" font-size="12">${esc(language)}</text>`
+    ? `<circle cx="22" cy="297" r="5" fill="${languageColor}"/>
+       <text x="33" y="301" fill="#8b949e" font-size="12">${esc(language)}</text>`
     : "";
 
   const repoText = github ? `${github.owner}/${github.repo}` : "";
 
   const repoBlock = repoText
-    ? `<text x="${CARD_WIDTH - 14}" y="297" text-anchor="end"
+    ? `<text x="${CARD_WIDTH - 14}" y="301" text-anchor="end"
         fill="#6e7681" font-size="10">${esc(truncate(repoText, 22))}</text>`
     : "";
 
@@ -278,7 +287,7 @@ function renderCardSVG(project, thumbnail, icon) {
         height="${THUMB_HEIGHT}" rx="6"/>
     </clipPath>
     <clipPath id="iconClip">
-      <rect x="16" y="181" width="28" height="28" rx="6"/>
+      <rect x="16" y="179" width="28" height="28" rx="6"/>
     </clipPath>
   </defs>
 
@@ -292,12 +301,12 @@ function renderCardSVG(project, thumbnail, icon) {
   ${thumbnailBlock}
   ${iconBlock}
 
-  <text x="${titleX}" y="201" fill="#e6edf3"
+  <text x="${titleX}" y="199" fill="#e6edf3"
     font-size="18" font-weight="600">${esc(title)}</text>
 
   ${descriptionBlock}
 
-  <path d="M12 276 H${CARD_WIDTH - 12}" stroke="#30363d" stroke-width="1"/>
+  <path d="M12 280 H${CARD_WIDTH - 12}" stroke="#30363d" stroke-width="1"/>
 
   ${languageBlock}
   ${repoBlock}
@@ -331,11 +340,13 @@ async function generateCards(projects) {
 
   for (let i = 0; i < projects.length; i++) {
     const project = projects[i];
+    console.log(`[${i + 1}/${projects.length}] ${project.title || "Untitled project"}`);
+
     const thumbnail = await downloadAsset(absUrl(project.thumbnail));
 
     // Skip projects without a valid image preview.
     if (!thumbnail) {
-      console.log(`Skipped ${project.title || "Untitled project"}: no preview`);
+      console.log(`  Skipped: no preview`);
       continue;
     }
 
@@ -346,7 +357,7 @@ async function generateCards(projects) {
     await svgToPng(svg, resolve(ASSET_DIR, filename));
 
     cards.push({ project, filename });
-    console.log(`Generated ${filename}`);
+    console.log(`  Generated ${filename}`);
   }
 
   return cards;
@@ -420,7 +431,15 @@ async function renderSection(title, projects) {
 
   const images = projects.map(({ project, filename }) => {
     const link = safeUrl(project.link || project.github_link);
-    const image = `<img src="assets/${filename}" width="${CARD_WIDTH}" alt="${esc(project.title)}" />`;
+
+    // Alt text = title + short description, so the description is embedded
+    // in the README's image alt text (tooltip / a11y / fallback).
+    const desc = truncate(project.description || "", 120);
+    const alt = desc
+      ? `${project.title || "Untitled project"} — ${desc}`
+      : (project.title || "Untitled project");
+
+    const image = `<img src="assets/${filename}" width="${CARD_WIDTH}" alt="${esc(alt)}" />`;
 
     return link
       ? `<a href="${esc(link)}">${image}</a>`
@@ -435,7 +454,14 @@ ${images.join("\n")}`;
 // ---------- main ----------
 
 async function main() {
-  const response = await fetch(API);
+  const hardTimeout = setTimeout(() => {
+    console.error(`Aborting: exceeded ${HARD_TIMEOUT_MS / 1000}s hard timeout.`);
+    process.exit(2);
+  }, HARD_TIMEOUT_MS);
+  hardTimeout.unref();
+
+  console.log(`Fetching ${API} ...`);
+  const response = await fetchWithTimeout(API);
 
   if (!response.ok) {
     throw new Error(`API error ${response.status}`);
@@ -443,8 +469,10 @@ async function main() {
 
   const json = await response.json();
   const projects = json.data ?? [];
+  console.log(`Got ${projects.length} projects. Downloading assets...`);
 
   const cards = await generateCards(projects);
+  console.log(`Cards ready: ${cards.length}. Rendering sections...`);
 
   const groups = {
     game: [],
